@@ -5,4 +5,8 @@ set -e
 cd "$(dirname "$0")/.."
 FW=/Library/Developer/CommandLineTools/Library/Developer/Frameworks
 PL=/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing
-exec swift test --build-system native "$@" -Xswiftc -F$FW -Xswiftc -plugin-path -Xswiftc $PL -Xlinker -rpath -Xlinker $FW 2>&1 | grep -v "ld: warning\|has been deprecated"
+# The package contains loopback servers and shared C-ABI state. Running every
+# Swift Testing suite concurrently can starve those services and turn a quick
+# request into the framework's 60-second timeout. Keep the reliable default
+# serial; callers can pass --parallel explicitly when they want to stress it.
+exec swift test --build-system native --no-parallel "$@" -Xswiftc -F$FW -Xswiftc -plugin-path -Xswiftc $PL -Xlinker -rpath -Xlinker $FW 2>&1 | grep -v "ld: warning\|has been deprecated"
