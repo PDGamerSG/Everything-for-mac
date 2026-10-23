@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Release-mode benchmark of the search engine (1M synthetic names).
-set -e
+set -euo pipefail
 cd "$(dirname "$0")/.."
 FW=/Library/Developer/CommandLineTools/Library/Developer/Frameworks
 PL=/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing
