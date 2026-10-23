@@ -39,7 +39,7 @@ let app = NSApplication.shared
 let commandLine: AppCommandLine
 do {
     commandLine = try AppCommandLine.parse(CommandLine.arguments)
-    if commandLine.help { print("Usage: Everything [-search text] [-startup] [-no-auto-index] [-rescan] [-save] [-exit] [-instance name]"); exit(0) }
+    if commandLine.help { print("Usage: Everything [-search text] [-startup] [-no-window] [-no-auto-index] [-rescan|-rescan-all] [-save] [-exit] [-toggle-window] [-instance name] [-url es:query]"); exit(0) }
     if commandLine.version { print(everythingVersion); exit(0) }
     AppPaths.instanceName = commandLine.instance
 } catch {
