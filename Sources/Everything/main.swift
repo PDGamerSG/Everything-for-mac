@@ -47,7 +47,8 @@ do {
     fputs("Everything: \(error)\n", stderr)
     exit(2)
 }
-if IPCClient.isRunning(path: SocketPath.path(instance: commandLine.instance)) {
+let instanceRunning = IPCClient.isRunning(path: SocketPath.path(instance: commandLine.instance))
+if instanceRunning {
     let forwarded: IPCRequest?
     if commandLine.exit {
         forwarded = IPCRequest(kind: .exit)
@@ -65,6 +66,7 @@ if IPCClient.isRunning(path: SocketPath.path(instance: commandLine.instance)) {
     if let forwarded { _ = try? IPCClient(instance: commandLine.instance).send(forwarded) }
     exit(0)
 }
+if commandLine.exit { exit(0) }
 let engine = AppEngine()
 do {
     try engine.start(scan: !commandLine.noAutoIndex)
