@@ -105,4 +105,12 @@ private final class ETPConnection {
         #expect(c.readLine().hasPrefix("226"))
         c.send("QUIT"); #expect(c.readLine().hasPrefix("221"))
     }
+
+    @Test func clientAuthenticatesAndQueriesServer() throws {
+        let server = ETPServer(service: etpFixture(), configuration: .init(port: 0, username: "u", password: "p"))
+        try server.start(); defer { server.stop() }
+        let client = ETPClient(configuration: .init(host: "127.0.0.1", port: server.port, username: "u", password: "p"))
+        let result = try client.query(IPCQueryParams(search: "hello"))
+        #expect(result.items.contains { $0.name == "hello.txt" })
+    }
 }
