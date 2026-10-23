@@ -38,6 +38,17 @@ import EverythingIPC
         #expect(engine.settings.bool("http_server_enabled"))
     }
 
+    @Test func instanceUsesSuffixedPersistenceFiles() throws {
+        let previous = AppPaths.instanceName
+        AppPaths.instanceName = "work"
+        defer { AppPaths.instanceName = previous }
+        let support = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("everything-instance-\(UUID().uuidString)")
+        let engine = AppEngine(settings: Settings(), supportDirectory: support)
+        try engine.save()
+        #expect(FileManager.default.fileExists(atPath: support.appendingPathComponent("Everything-work.db").path))
+        #expect(FileManager.default.fileExists(atPath: support.appendingPathComponent("Journal-work.db").path))
+    }
+
     @Test func startsConfiguredETPServer() throws {
         let support = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("everything-app-\(UUID().uuidString)")
         let settings = Settings()

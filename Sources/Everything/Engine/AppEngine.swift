@@ -39,12 +39,14 @@ public final class AppEngine: @unchecked Sendable {
     public init(settings: Settings? = nil, supportDirectory: URL = AppPaths.supportDirectory,
                 volumeProvider: @escaping @Sendable () -> [VolumeInfo] = { Volumes.mounted() }) {
         self.supportDirectory = supportDirectory
-        self.settings = settings ?? Settings.load(from: supportDirectory.appendingPathComponent("Everything.ini"))
+        let suffix = AppPaths.instanceName.isEmpty ? "" : "-\(AppPaths.instanceName)"
+        self.settings = settings ?? Settings.load(from: supportDirectory.appendingPathComponent("Everything\(suffix).ini"))
         self.volumeProvider = volumeProvider
-        databaseURL = supportDirectory.appendingPathComponent("Everything.db")
-        journalURL = supportDirectory.appendingPathComponent("Journal.db")
-        runHistoryURL = supportDirectory.appendingPathComponent("Run History.csv")
-        let preferredSocket = supportDirectory.appendingPathComponent("everything.sock").path
+        databaseURL = supportDirectory.appendingPathComponent("Everything\(suffix).db")
+        journalURL = supportDirectory.appendingPathComponent("Journal\(suffix).db")
+        runHistoryURL = supportDirectory.appendingPathComponent("Run History\(suffix).csv")
+        let socketName = AppPaths.instanceName.isEmpty ? "everything.sock" : "everything-\(AppPaths.instanceName).sock"
+        let preferredSocket = supportDirectory.appendingPathComponent(socketName).path
         socketPath = preferredSocket.utf8.count < 100 ? preferredSocket : (NSTemporaryDirectory() as NSString).appendingPathComponent("everything-\(UUID().uuidString).sock")
         if let loaded = try? IndexDB.load(from: databaseURL) {
             index = loaded
@@ -54,7 +56,7 @@ public final class AppEngine: @unchecked Sendable {
         let maxJournalKB = max(64, self.settings.int("journal_max_size"))
         journal = IndexJournal.load(from: journalURL, maxKB: maxJournalKB) ?? IndexJournal(maxKB: maxJournalKB)
         runHistory = RunHistory.load(from: runHistoryURL)
-        omissions = OmissionStore.load(from: supportDirectory.appendingPathComponent("Omit Results.csv"))
+        omissions = OmissionStore.load(from: supportDirectory.appendingPathComponent("Omit Results\(suffix).csv"))
         temporaryOmissions = OmissionStore(temporary: true)
         search = SearchEngine(index: index)
         search.runHistory = runHistory
@@ -138,7 +140,8 @@ public final class AppEngine: @unchecked Sendable {
         try IndexDB.save(index, to: databaseURL)
         try journal.save(to: journalURL)
         try runHistory.save(to: runHistoryURL)
-        try omissions.save(to: supportDirectory.appendingPathComponent("Omit Results.csv"))
+        let suffix = AppPaths.instanceName.isEmpty ? "" : "-\(AppPaths.instanceName)"
+        try omissions.save(to: supportDirectory.appendingPathComponent("Omit Results\(suffix).csv"))
         index.dbLoaded = true
     }
 
