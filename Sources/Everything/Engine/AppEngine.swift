@@ -35,6 +35,7 @@ public final class AppEngine: @unchecked Sendable {
     private let scanGroup = DispatchGroup()
     private let volumeProvider: @Sendable () -> [VolumeInfo]
     private var scanTask: DispatchWorkItem?
+    private var autosaveTimer: DispatchSourceTimer?
 
     public init(settings: Settings? = nil, supportDirectory: URL = AppPaths.supportDirectory,
                 volumeProvider: @escaping @Sendable () -> [VolumeInfo] = { Volumes.mounted() }) {
@@ -112,6 +113,7 @@ public final class AppEngine: @unchecked Sendable {
             try server.start(); netIndex = server
         }
         isRunning = true
+        startAutosaveTimer()
         if needsInitialScan {
             isScanning = true
             scanGroup.enter()
@@ -128,6 +130,7 @@ public final class AppEngine: @unchecked Sendable {
         lock.lock()
         guard isRunning else { lock.unlock(); return }
         scanTask?.cancel()
+        autosaveTimer?.cancel(); autosaveTimer = nil
         monitor.stopAll(); http?.stop(); http = nil; etp?.stop(); etp = nil; netIndex?.stop(); netIndex = nil; ipc?.stop(); ipc = nil
         isRunning = false
         lock.unlock()
@@ -164,6 +167,16 @@ public final class AppEngine: @unchecked Sendable {
         for root in roots where root.monitor {
             monitor.start(root: root, sinceEventID: root.lastEventID == 0 ? nil : root.lastEventID)
         }
+    }
+
+    private func startAutosaveTimer() {
+        let interval = settings.int("db_autosave_interval")
+        guard interval > 0, autosaveTimer == nil else { return }
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+        timer.schedule(deadline: .now() + .seconds(interval), repeating: .seconds(interval))
+        timer.setEventHandler { [weak self] in try? self?.save() }
+        timer.resume()
+        autosaveTimer = timer
     }
 
     private func scanConfiguredVolumes() {
