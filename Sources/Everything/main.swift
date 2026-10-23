@@ -1,5 +1,7 @@
 import AppKit
 import Foundation
+import EverythingCore
+import EverythingIPC
 
 @MainActor
 final class EverythingAppDelegate: NSObject, NSApplicationDelegate {
@@ -16,16 +18,34 @@ final class EverythingAppDelegate: NSObject, NSApplicationDelegate {
 }
 
 let app = NSApplication.shared
+let commandLine: AppCommandLine
+do {
+    commandLine = try AppCommandLine.parse(CommandLine.arguments)
+    if commandLine.help { print("Usage: Everything [-search text] [-startup] [-no-auto-index] [-rescan] [-save] [-exit] [-instance name]"); exit(0) }
+    if commandLine.version { print(everythingVersion); exit(0) }
+    AppPaths.instanceName = commandLine.instance
+} catch {
+    fputs("Everything: \(error)\n", stderr)
+    exit(2)
+}
+if commandLine.exit, IPCClient.isRunning(path: SocketPath.path(instance: commandLine.instance)) {
+    let request = IPCRequest(kind: .exit)
+    _ = try? IPCClient(instance: commandLine.instance).send(request)
+    exit(0)
+}
 let engine = AppEngine()
 do {
-    try engine.start(scan: !CommandLine.arguments.contains("-no-auto-index"))
+    try engine.start(scan: !commandLine.noAutoIndex)
+    if commandLine.rescan || commandLine.rescanAll { engine.rebuild() }
+    if commandLine.save { try engine.save() }
 } catch {
     fputs("Everything: \(error)\n", stderr)
     exit(1)
 }
-let appDelegate = MainActor.assumeIsolated { EverythingAppDelegate(engine: engine, showWindow: !CommandLine.arguments.contains("-startup")) }
+let appDelegate = MainActor.assumeIsolated { EverythingAppDelegate(engine: engine, showWindow: !commandLine.startup && !commandLine.noWindow) }
+if let search = commandLine.search { MainActor.assumeIsolated { appDelegate.windowController.setSearch(search) } }
 app.delegate = appDelegate
-app.setActivationPolicy(CommandLine.arguments.contains("-startup") ? .accessory : .regular)
+app.setActivationPolicy(commandLine.startup || commandLine.noWindow ? .accessory : .regular)
 signal(SIGTERM) { _ in NSApplication.shared.terminate(nil) }
 signal(SIGINT) { _ in NSApplication.shared.terminate(nil) }
 app.run()

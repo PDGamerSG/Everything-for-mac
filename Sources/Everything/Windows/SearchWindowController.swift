@@ -37,6 +37,8 @@ public final class SearchWindowController: NSWindowController {
         window?.makeKeyAndOrderFront(sender)
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    public func setSearch(_ text: String) { contentController.setSearch(text) }
 }
 
 @MainActor
@@ -115,6 +117,7 @@ private final class SearchViewController: NSViewController, NSSearchFieldDelegat
     }
 
     func controlTextDidChange(_ notification: Notification) { scheduleSearch() }
+    func setSearch(_ text: String) { searchField.stringValue = text; performSearch() }
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         if commandSelector == #selector(NSResponder.insertNewline(_:)) { performSearch(); return true }
         return false

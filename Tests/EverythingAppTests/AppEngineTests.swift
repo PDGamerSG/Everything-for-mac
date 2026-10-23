@@ -49,4 +49,16 @@ import EverythingIPC
         #expect(controller.searchField != nil)
         #expect(controller.tableView?.numberOfColumns == 4)
     }
+
+    @Test func parsesAppCommandLine() throws {
+        let options = try AppCommandLine.parse(["Everything", "-search", "report 2026", "-startup", "-rescan", "-instance", "work"])
+        #expect(options.search == "report 2026")
+        #expect(options.startup)
+        #expect(options.rescan)
+        #expect(options.instance == "work")
+    }
+
+    @Test func rejectsUnknownAppSwitch() {
+        #expect(throws: AppCommandLine.Error.self) { try AppCommandLine.parse(["Everything", "-not-real"]) }
+    }
 }
