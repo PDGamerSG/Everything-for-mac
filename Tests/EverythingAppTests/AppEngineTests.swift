@@ -78,6 +78,7 @@ import EverythingIPC
         #expect(options.startup)
         #expect(options.rescan)
         #expect(options.instance == "work")
+        #expect(try AppCommandLine.parse(["Everything", "-url", "es:invoice"]).search == "invoice")
     }
 
     @Test func rejectsUnknownAppSwitch() {

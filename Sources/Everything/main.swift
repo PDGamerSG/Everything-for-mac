@@ -17,6 +17,21 @@ final class EverythingAppDelegate: NSObject, NSApplicationDelegate {
         menuController.install()
         if showWindow { windowController.showWindow(nil) }
     }
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            if url.scheme?.lowercased() == "es" {
+                let query = url.host ?? url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                windowController.showWindow(nil)
+                windowController.setSearch(query.removingPercentEncoding ?? query)
+            } else if url.pathExtension.lowercased() == "efu" {
+                if let list = try? FileList.read(url) {
+                    _ = list.load(into: engine.index, label: url.deletingPathExtension().lastPathComponent)
+                    try? engine.save()
+                    windowController.showWindow(nil)
+                }
+            }
+        }
+    }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 }
 
