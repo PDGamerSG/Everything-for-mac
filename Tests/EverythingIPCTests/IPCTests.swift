@@ -20,6 +20,14 @@ final class EchoService: IPCService {
 }
 
 @Suite(.serialized) struct IPCTests {
+    /// Waits for an async service response.
+    func call(_ service: IPCService, _ r: IPCRequest) -> IPCResponse {
+        let sema = DispatchSemaphore(value: 0)
+        var out = IPCResponse.failure("none")
+        service.handle(r) { out = $0; sema.signal() }
+        _ = sema.wait(timeout: .now() + 10)
+        return out
+    }
     func tempSocket() -> String { (NSTemporaryDirectory() as NSString).appendingPathComponent("evt-\(UUID().uuidString.prefix(8)).sock") }
 
     @Test func roundTripAndLargeFrames() throws {
@@ -90,20 +98,19 @@ final class EchoService: IPCService {
         #expect(p.items.count == 2 && p.totalResults == 5)
         // run count ops through handle()
         var inc = IPCRequest(kind: .runCountInc); inc.path = "/Docs/Alpha.txt"
-        var got: IPCResponse? = nil
-        service.handle(inc) { got = $0 }
+        var got: IPCResponse? = call(service, inc)
         #expect(got?.int == 1)
         var get = IPCRequest(kind: .runCountGet); get.path = "/Docs/Alpha.txt"
-        service.handle(get) { got = $0 }
+        got = call(service, get)
         #expect(got?.int == 1)
         // folder size
         var fs = IPCRequest(kind: .folderSize); fs.path = "/Docs"
-        service.handle(fs) { got = $0 }
+        got = call(service, fs)
         #expect(got?.uint64 == 30)
         // journal query + watch
         journal.append(.fileCreate, name: "n.txt", path: "/Docs")
         var jr = IPCRequest(kind: .journal); var jp = IPCJournalParams(); jp.text = "n.txt"; jr.journal = jp
-        service.handle(jr) { got = $0 }
+        got = call(service, jr)
         #expect(got?.journal?.entries.count == 1)
         var watch = IPCRequest(kind: .journal); var wp = IPCJournalParams(); wp.watch = true; wp.timeoutMs = 3000; wp.text = "later.txt"; wp.fromChangeID = journal.nextChangeID; watch.journal = wp
         let sema = DispatchSemaphore(value: 0)
@@ -113,9 +120,9 @@ final class EchoService: IPCService {
         #expect(sema.wait(timeout: .now() + 5) == .success)
         #expect(watched?.journal?.entries.first?.name == "later.txt")
         // statistics & roots
-        service.handle(IPCRequest(kind: .statistics)) { got = $0 }
+        got = call(service, IPCRequest(kind: .statistics))
         #expect(got?.dictionary?["files"] == "3")
-        service.handle(IPCRequest(kind: .roots)) { got = $0 }
+        got = call(service, IPCRequest(kind: .roots))
         #expect(got?.roots?.first?.label == "x")
         #expect(EngineService.mark("a*b", [("a*b".startIndex)..<("a*b".index(after: "a*b".startIndex))]) == "*a***b")
     }
