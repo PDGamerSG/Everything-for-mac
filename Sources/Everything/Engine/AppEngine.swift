@@ -1,0 +1,137 @@
+import Foundation
+import EverythingCore
+import EverythingIPC
+import EverythingServers
+
+/// Owns the long-lived index, persistence, monitor, IPC, and optional HTTP service.
+/// UI code talks to this object instead of reaching into the core directly.
+public final class AppEngine: @unchecked Sendable {
+    public let settings: Settings
+    public let supportDirectory: URL
+    public let databaseURL: URL
+    public let journalURL: URL
+    public let runHistoryURL: URL
+    public let index: Index
+    public let search: SearchEngine
+    public let journal: IndexJournal
+    public let runHistory: RunHistory
+    public let omissions: OmissionStore
+    public let temporaryOmissions: OmissionStore
+    public let monitor: ChangeMonitor
+    public let service: EngineService
+    public let socketPath: String
+    public private(set) var ipc: IPCServer?
+    public private(set) var http: HTTPServer?
+    public private(set) var isRunning = false
+    public var log: ((String) -> Void)? {
+        didSet { monitor.log = log; ipc?.log = log; http?.log = log }
+    }
+
+    private let lock = NSLock()
+
+    public init(settings: Settings = Settings(), supportDirectory: URL = AppPaths.supportDirectory) {
+        self.settings = settings
+        self.supportDirectory = supportDirectory
+        databaseURL = supportDirectory.appendingPathComponent("Everything.db")
+        journalURL = supportDirectory.appendingPathComponent("Journal.db")
+        runHistoryURL = supportDirectory.appendingPathComponent("Run History.csv")
+        let preferredSocket = supportDirectory.appendingPathComponent("everything.sock").path
+        socketPath = preferredSocket.utf8.count < 100 ? preferredSocket : (NSTemporaryDirectory() as NSString).appendingPathComponent("everything-\(UUID().uuidString).sock")
+        if let loaded = try? IndexDB.load(from: databaseURL) {
+            index = loaded
+        } else {
+            index = Index()
+        }
+        let maxJournalKB = max(64, settings.int("journal_max_size"))
+        journal = IndexJournal.load(from: journalURL, maxKB: maxJournalKB) ?? IndexJournal(maxKB: maxJournalKB)
+        runHistory = RunHistory.load(from: runHistoryURL)
+        omissions = OmissionStore.load(from: supportDirectory.appendingPathComponent("Omit Results.csv"))
+        temporaryOmissions = OmissionStore(temporary: true)
+        search = SearchEngine(index: index)
+        search.runHistory = runHistory
+        search.recentChanges = journal
+        search.omissions = omissions
+        search.tempOmissions = temporaryOmissions
+        monitor = ChangeMonitor(index: index, journal: journal)
+        service = EngineService(engine: search)
+        service.journal = journal
+        service.runHistory = runHistory
+        service.dbLoaded = { [weak index] in index?.dbLoaded ?? false }
+    }
+
+    public func start(scan: Bool = true, servers: Bool = true) throws {
+        lock.lock(); defer { lock.unlock() }
+        guard !isRunning else { return }
+        try FileManager.default.createDirectory(at: supportDirectory, withIntermediateDirectories: true)
+        wireService()
+        if scan && !index.dbLoaded { scanConfiguredVolumes() }
+        for root in index.roots where root.monitor { monitor.start(root: root, sinceEventID: root.lastEventID == 0 ? nil : root.lastEventID) }
+        let server = IPCServer(path: socketPath, service: service)
+        server.log = log
+        try server.start()
+        ipc = server
+        if servers && settings.bool("http_server_enabled") {
+            let config = HTTPServer.Configuration(bindAddress: settings.string("http_server_bind").isEmpty ? "127.0.0.1" : settings.string("http_server_bind"),
+                                                  port: UInt16(max(0, settings.int("http_server_port"))),
+                                                  username: settings.string("http_server_username"), password: settings.string("http_server_password"),
+                                                  allowDownloads: settings.bool("http_server_allow_file_download"),
+                                                  itemsPerPage: max(1, settings.int("http_server_items_per_page")))
+            let httpServer = HTTPServer(service: service, configuration: config)
+            httpServer.log = log
+            try httpServer.start(); http = httpServer
+        }
+        isRunning = true
+    }
+
+    public func stop() {
+        lock.lock(); defer { lock.unlock() }
+        guard isRunning else { return }
+        monitor.stopAll(); http?.stop(); http = nil; ipc?.stop(); ipc = nil
+        try? save(); isRunning = false
+    }
+
+    public func save() throws {
+        try FileManager.default.createDirectory(at: supportDirectory, withIntermediateDirectories: true)
+        try IndexDB.save(index, to: databaseURL)
+        try journal.save(to: journalURL)
+        try runHistory.save(to: runHistoryURL)
+        try omissions.save(to: supportDirectory.appendingPathComponent("Omit Results.csv"))
+        index.dbLoaded = true
+    }
+
+    public func rebuild() {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self else { return }
+            for root in self.index.roots {
+                let devices = Volumes.deviceID(of: root.path).map { Set([$0]) } ?? []
+                _ = VolumeScanner(index: self.index, rules: .none, allowedDevices: devices).scan(rootPath: root.path, rootItem: root.item)
+            }
+            self.index.dbLoaded = true
+            try? self.save()
+        }
+    }
+
+    private func scanConfiguredVolumes() {
+        let volumes = Volumes.selected(from: Volumes.mounted(), settings: settings)
+        for volume in volumes {
+            let root = index.addRoot(kind: volume.isNetwork ? .network : .volume, path: volume.mountPoint, label: volume.name,
+                                     uuid: volume.uuid, deviceID: volume.deviceID, fileSystem: volume.fileSystem)
+            _ = VolumeScanner(index: index, rules: .none, allowedDevices: volume.allDeviceIDs).scan(rootPath: volume.mountPoint, rootItem: root.item)
+        }
+        index.dbLoaded = true
+    }
+
+    private func wireService() {
+        service.onRebuildDB = { [weak self] in self?.rebuild() }
+        service.onSaveDB = { [weak self] in try? self?.save() }
+        service.onSaveRunHistory = { [weak self] in try? self?.runHistory.save(to: self?.runHistoryURL ?? AppPaths.runHistoryFile) }
+        service.onExit = { [weak self] in self?.stop() }
+        service.onRescanAll = { [weak self] in self?.rebuild() }
+        service.onMonitorPause = { [weak self] paused in paused ? self?.monitor.pause() : self?.monitor.resume() }
+        service.statistics = { [weak self] in
+            guard let self else { return [:] }
+            let s = self.monitor.statistics
+            return ["monitor.created": String(s.created), "monitor.removed": String(s.removed), "monitor.modified": String(s.modified), "monitor.events": String(s.events)]
+        }
+    }
+}

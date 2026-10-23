@@ -27,6 +27,7 @@ let package = Package(
         .testTarget(name: "EverythingIPCTests", dependencies: ["EverythingIPC"], path: "Tests/EverythingIPCTests"),
         .testTarget(name: "EverythingServersTests", dependencies: ["EverythingServers"], path: "Tests/EverythingServersTests"),
         .testTarget(name: "ESTests", dependencies: ["es", "EverythingIPC"], path: "Tests/ESTests"),
+        .testTarget(name: "EverythingAppTests", dependencies: ["Everything"], path: "Tests/EverythingAppTests"),
     ],
     swiftLanguageVersions: [.v5]
 )
