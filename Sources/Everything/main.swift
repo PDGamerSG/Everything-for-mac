@@ -46,9 +46,22 @@ do {
     fputs("Everything: \(error)\n", stderr)
     exit(2)
 }
-if commandLine.exit, IPCClient.isRunning(path: SocketPath.path(instance: commandLine.instance)) {
-    let request = IPCRequest(kind: .exit)
-    _ = try? IPCClient(instance: commandLine.instance).send(request)
+if IPCClient.isRunning(path: SocketPath.path(instance: commandLine.instance)) {
+    let forwarded: IPCRequest?
+    if commandLine.exit {
+        forwarded = IPCRequest(kind: .exit)
+    } else if let search = commandLine.search {
+        var request = IPCRequest(kind: .command); request.args = ["search", search]; forwarded = request
+    } else if commandLine.toggle {
+        var request = IPCRequest(kind: .command); request.args = ["toggle"]; forwarded = request
+    } else if commandLine.save {
+        forwarded = IPCRequest(kind: .saveDB)
+    } else if commandLine.rescan || commandLine.rescanAll {
+        forwarded = IPCRequest(kind: .rescanAll)
+    } else {
+        forwarded = nil
+    }
+    if let forwarded { _ = try? IPCClient(instance: commandLine.instance).send(forwarded) }
     exit(0)
 }
 let engine = AppEngine()
@@ -62,6 +75,21 @@ do {
 }
 let appDelegate = MainActor.assumeIsolated { EverythingAppDelegate(engine: engine, showWindow: !commandLine.startup && !commandLine.noWindow) }
 if let search = commandLine.search { MainActor.assumeIsolated { appDelegate.windowController.setSearch(search) } }
+engine.service.onCommand = { args in
+    guard let command = args.first?.lowercased() else { return .failure("missing command") }
+    Task { @MainActor in
+        switch command {
+        case "search":
+            appDelegate.windowController.showWindow(nil)
+            if args.count > 1 { appDelegate.windowController.setSearch(args.dropFirst().joined(separator: " ")) }
+        case "toggle":
+            if appDelegate.windowController.window?.isVisible == true { appDelegate.windowController.close() }
+            else { appDelegate.windowController.showWindow(nil) }
+        default: break
+        }
+    }
+    return .value(true)
+}
 app.delegate = appDelegate
 app.setActivationPolicy(commandLine.startup || commandLine.noWindow ? .accessory : .regular)
 signal(SIGTERM) { _ in NSApplication.shared.terminate(nil) }
