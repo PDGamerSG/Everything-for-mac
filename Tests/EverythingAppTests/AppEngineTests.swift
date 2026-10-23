@@ -40,4 +40,13 @@ import EverythingIPC
         #expect(engine.etp != nil)
         #expect(engine.etp?.port ?? 0 > 0)
     }
+
+    @Test @MainActor func buildsSearchWindow() throws {
+        let engine = AppEngine(settings: Settings(), supportDirectory: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("everything-ui-\(UUID().uuidString)"))
+        let controller = SearchWindowController(engine: engine)
+        controller.loadWindow()
+        #expect(controller.window != nil)
+        #expect(controller.searchField != nil)
+        #expect(controller.tableView?.numberOfColumns == 4)
+    }
 }
