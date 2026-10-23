@@ -1,0 +1,6 @@
+Everything-1.5.0.1424b.x64-Setup.exe
+.build/
+*.xcodeproj
+.DS_Store
+dist/
+*.dSYM
