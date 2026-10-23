@@ -61,4 +61,27 @@ import EverythingIPC
     @Test func rejectsUnknownAppSwitch() {
         #expect(throws: AppCommandLine.Error.self) { try AppCommandLine.parse(["Everything", "-not-real"]) }
     }
+
+    @Test func scansInitialVolumeInBackgroundAndPublishesResults() throws {
+        let rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("everything-scan-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        try Data("indexed".utf8).write(to: rootURL.appendingPathComponent("indexed.txt"))
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let settings = Settings()
+        settings.set("volumes", rootURL.path)
+        let volume = VolumeInfo(name: "Fixture", mountPoint: rootURL.path, deviceID: Volumes.deviceID(of: rootURL.path) ?? 0)
+        let support = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("everything-scan-support-\(UUID().uuidString)")
+        let engine = AppEngine(settings: settings, supportDirectory: support, volumeProvider: { [volume] })
+        let startedAt = Date()
+        try engine.start(scan: true, servers: false)
+        #expect(Date().timeIntervalSince(startedAt) < 0.5)
+        #expect(engine.isScanning)
+        defer { engine.stop() }
+
+        for _ in 0..<100 where engine.isScanning { Thread.sleep(forTimeInterval: 0.01) }
+        #expect(!engine.isScanning)
+        #expect(engine.index.lookup(path: rootURL.appendingPathComponent("indexed.txt").path) != nil)
+        #expect(engine.index.dbLoaded)
+    }
 }

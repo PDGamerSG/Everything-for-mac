@@ -24,15 +24,22 @@ public final class AppEngine: @unchecked Sendable {
     public private(set) var http: HTTPServer?
     public private(set) var etp: ETPServer?
     public private(set) var isRunning = false
+    public private(set) var isScanning = false
     public var log: ((String) -> Void)? {
         didSet { monitor.log = log; ipc?.log = log; http?.log = log }
     }
 
     private let lock = NSLock()
+    private let scanQueue = DispatchQueue(label: "everything.app.initial-scan", qos: .utility)
+    private let scanGroup = DispatchGroup()
+    private let volumeProvider: @Sendable () -> [VolumeInfo]
+    private var scanTask: DispatchWorkItem?
 
-    public init(settings: Settings = Settings(), supportDirectory: URL = AppPaths.supportDirectory) {
+    public init(settings: Settings = Settings(), supportDirectory: URL = AppPaths.supportDirectory,
+                volumeProvider: @escaping @Sendable () -> [VolumeInfo] = { Volumes.mounted() }) {
         self.settings = settings
         self.supportDirectory = supportDirectory
+        self.volumeProvider = volumeProvider
         databaseURL = supportDirectory.appendingPathComponent("Everything.db")
         journalURL = supportDirectory.appendingPathComponent("Journal.db")
         runHistoryURL = supportDirectory.appendingPathComponent("Run History.csv")
@@ -65,8 +72,10 @@ public final class AppEngine: @unchecked Sendable {
         guard !isRunning else { return }
         try FileManager.default.createDirectory(at: supportDirectory, withIntermediateDirectories: true)
         wireService()
-        if scan && !index.dbLoaded { scanConfiguredVolumes() }
-        for root in index.roots where root.monitor { monitor.start(root: root, sinceEventID: root.lastEventID == 0 ? nil : root.lastEventID) }
+        let needsInitialScan = scan && !index.dbLoaded
+        if !needsInitialScan {
+            startMonitors()
+        }
         let server = IPCServer(path: socketPath, service: service)
         server.log = log
         try server.start()
@@ -91,13 +100,27 @@ public final class AppEngine: @unchecked Sendable {
             try etpServer.start(); etp = etpServer
         }
         isRunning = true
+        if needsInitialScan {
+            isScanning = true
+            scanGroup.enter()
+            let task = DispatchWorkItem { [weak self] in
+                defer { self?.scanGroup.leave() }
+                self?.scanConfiguredVolumes()
+            }
+            scanTask = task
+            scanQueue.async(execute: task)
+        }
     }
 
     public func stop() {
-        lock.lock(); defer { lock.unlock() }
-        guard isRunning else { return }
+        lock.lock()
+        guard isRunning else { lock.unlock(); return }
+        scanTask?.cancel()
         monitor.stopAll(); http?.stop(); http = nil; etp?.stop(); etp = nil; ipc?.stop(); ipc = nil
-        try? save(); isRunning = false
+        isRunning = false
+        lock.unlock()
+        scanGroup.wait()
+        try? save()
     }
 
     public func save() throws {
@@ -112,7 +135,8 @@ public final class AppEngine: @unchecked Sendable {
     public func rebuild() {
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self else { return }
-            for root in self.index.roots {
+            let roots = self.index.read { self.index.roots }
+            for root in roots {
                 let devices = Volumes.deviceID(of: root.path).map { Set([$0]) } ?? []
                 _ = VolumeScanner(index: self.index, rules: .none, allowedDevices: devices).scan(rootPath: root.path, rootItem: root.item)
             }
@@ -121,14 +145,30 @@ public final class AppEngine: @unchecked Sendable {
         }
     }
 
+    private func startMonitors() {
+        let roots = index.read { index.roots }
+        for root in roots where root.monitor {
+            monitor.start(root: root, sinceEventID: root.lastEventID == 0 ? nil : root.lastEventID)
+        }
+    }
+
     private func scanConfiguredVolumes() {
-        let volumes = Volumes.selected(from: Volumes.mounted(), settings: settings)
+        let volumes = Volumes.selected(from: volumeProvider(), settings: settings)
         for volume in volumes {
-            let root = index.addRoot(kind: volume.isNetwork ? .network : .volume, path: volume.mountPoint, label: volume.name,
-                                     uuid: volume.uuid, deviceID: volume.deviceID, fileSystem: volume.fileSystem)
+            guard !(scanTask?.isCancelled ?? false) else { break }
+            let root = index.write {
+                index.addRoot(kind: volume.isNetwork ? .network : .volume, path: volume.mountPoint, label: volume.name,
+                              uuid: volume.uuid, deviceID: volume.deviceID, fileSystem: volume.fileSystem)
+            }
             _ = VolumeScanner(index: index, rules: .none, allowedDevices: volume.allDeviceIDs).scan(rootPath: volume.mountPoint, rootItem: root.item)
         }
-        index.dbLoaded = true
+        lock.lock()
+        let shouldPublish = isRunning && !(scanTask?.isCancelled ?? false)
+        if shouldPublish { index.dbLoaded = true; startMonitors() }
+        isScanning = false
+        scanTask = nil
+        lock.unlock()
+        if shouldPublish { try? save() }
     }
 
     private func wireService() {
