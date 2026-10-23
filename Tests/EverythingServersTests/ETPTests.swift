@@ -31,6 +31,39 @@ private final class ETPConnection {
         return String(decoding: bytes, as: UTF8.self)
     }
     func send(_ line: String) { let data = Data((line + "\r\n").utf8); _ = data.withUnsafeBytes { Darwin.write(fd, $0.baseAddress, data.count) } }
+
+    func openPassiveData(from response: String) throws -> Int32 {
+        let values = response.split(whereSeparator: { !$0.isNumber }).compactMap { UInt16($0) }
+        guard values.count >= 2 else {
+            throw NSError(domain: "pasv", code: 1, userInfo: [NSLocalizedDescriptionKey: response])
+        }
+        let port = values[values.count - 2] * 256 + values[values.count - 1]
+        let dataFD = socket(AF_INET, SOCK_STREAM, 0)
+        guard dataFD >= 0 else { throw NSError(domain: "data-socket", code: Int(errno)) }
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = port.bigEndian
+        address.sin_addr = in_addr(s_addr: inet_addr("127.0.0.1"))
+        let connected = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.connect(dataFD, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        guard connected == 0 else { close(dataFD); throw NSError(domain: "data-connect", code: Int(errno)) }
+        return dataFD
+    }
+
+    func readData(_ dataFD: Int32) -> Data {
+        defer { close(dataFD) }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = buffer.withUnsafeMutableBytes { Darwin.read(dataFD, $0.baseAddress, $0.count) }
+            if count <= 0 { return data }
+            data.append(buffer, count: count)
+        }
+    }
 }
 
 @Suite(.serialized) struct ETPTests {
@@ -52,5 +85,24 @@ private final class ETPConnection {
         try server.start(); defer { server.stop() }
         let c = try ETPConnection(port: server.port); _ = c.readLine()
         c.send("RETR /tmp/nope"); #expect(c.readLine().hasPrefix("550"))
+    }
+
+    @Test func passiveRetrStreamsFixtureFile() throws {
+        let fixture = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("everything-etp-\(UUID().uuidString).txt")
+        let contents = Data("ETP payload ✓\n".utf8)
+        try contents.write(to: fixture)
+        defer { try? FileManager.default.removeItem(at: fixture) }
+
+        let server = ETPServer(service: etpFixture(), configuration: .init(port: 0, allowDownloads: true))
+        try server.start(); defer { server.stop() }
+        let c = try ETPConnection(port: server.port); #expect(c.readLine().hasPrefix("220"))
+        c.send("PASV")
+        let passive = c.readLine(); #expect(passive.hasPrefix("227"))
+        let dataFD = try c.openPassiveData(from: passive)
+        c.send("RETR \(fixture.path)")
+        #expect(c.readLine().hasPrefix("150"))
+        #expect(c.readData(dataFD) == contents)
+        #expect(c.readLine().hasPrefix("226"))
+        c.send("QUIT"); #expect(c.readLine().hasPrefix("221"))
     }
 }
