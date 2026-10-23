@@ -47,6 +47,7 @@ import EverythingIPC
         try engine.save()
         #expect(FileManager.default.fileExists(atPath: support.appendingPathComponent("Everything-work.db").path))
         #expect(FileManager.default.fileExists(atPath: support.appendingPathComponent("Journal-work.db").path))
+        #expect(FileManager.default.fileExists(atPath: support.appendingPathComponent("Everything-work.ini").path))
     }
 
     @Test func startsConfiguredETPServer() throws {

@@ -142,6 +142,7 @@ public final class AppEngine: @unchecked Sendable {
         try runHistory.save(to: runHistoryURL)
         let suffix = AppPaths.instanceName.isEmpty ? "" : "-\(AppPaths.instanceName)"
         try omissions.save(to: supportDirectory.appendingPathComponent("Omit Results\(suffix).csv"))
+        try settings.save(to: supportDirectory.appendingPathComponent("Everything\(suffix).ini"))
         index.dbLoaded = true
     }
 
