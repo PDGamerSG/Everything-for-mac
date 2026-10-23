@@ -154,16 +154,18 @@ public final class AppEngine: @unchecked Sendable {
 
     private func scanConfiguredVolumes() {
         let volumes = Volumes.selected(from: volumeProvider(), settings: settings)
+        let task = scanTask
         for volume in volumes {
-            guard !(scanTask?.isCancelled ?? false) else { break }
+            guard !(task?.isCancelled ?? true) else { break }
             let root = index.write {
                 index.addRoot(kind: volume.isNetwork ? .network : .volume, path: volume.mountPoint, label: volume.name,
                               uuid: volume.uuid, deviceID: volume.deviceID, fileSystem: volume.fileSystem)
             }
-            _ = VolumeScanner(index: index, rules: .none, allowedDevices: volume.allDeviceIDs).scan(rootPath: volume.mountPoint, rootItem: root.item)
+            _ = VolumeScanner(index: index, rules: .none, allowedDevices: volume.allDeviceIDs).scan(
+                rootPath: volume.mountPoint, rootItem: root.item, cancel: { task?.isCancelled ?? true })
         }
         lock.lock()
-        let shouldPublish = isRunning && !(scanTask?.isCancelled ?? false)
+        let shouldPublish = isRunning && !(task?.isCancelled ?? true)
         if shouldPublish { index.dbLoaded = true; startMonitors() }
         isScanning = false
         scanTask = nil
