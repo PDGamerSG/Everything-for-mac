@@ -39,6 +39,7 @@ public final class IPCServer: @unchecked Sendable {
         guard bindResult == 0 else { let e = errno; close(fd); throw IPCError.bind(e) }
         chmod(path, 0o600)
         guard listen(fd, 64) == 0 else { let e = errno; close(fd); throw IPCError.listen(e) }
+        _ = fcntl(fd, F_SETFL, O_NONBLOCK)
         listenFD = fd
         let src = DispatchSource.makeReadSource(fileDescriptor: fd, queue: acceptQueue)
         src.setEventHandler { [weak self] in self?.acceptPending() }
@@ -61,6 +62,9 @@ public final class IPCServer: @unchecked Sendable {
         while true {
             let client = accept(listenFD, nil, nil)
             if client < 0 { return }
+            _ = fcntl(client, F_SETFL, 0)
+            var noSigPipe: Int32 = 1
+            setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
             workQueue.async { [self] in self.serve(client) }
         }
     }

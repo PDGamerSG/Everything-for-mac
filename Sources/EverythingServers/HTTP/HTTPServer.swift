@@ -53,6 +53,7 @@ public final class HTTPServer: @unchecked Sendable {
         let bound = withUnsafePointer(to: &endpoint) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) } }
         guard bound == 0 else { let e = errno; close(fd); throw ServerError.bind(e) }
         guard listen(fd, 64) == 0 else { let e = errno; close(fd); throw ServerError.listen(e) }
+        _ = fcntl(fd, F_SETFL, O_NONBLOCK)
         var actual = sockaddr_in(); var length = socklen_t(MemoryLayout<sockaddr_in>.size)
         withUnsafeMutablePointer(to: &actual) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { _ = getsockname(fd, $0, &length) } }
         port = UInt16(bigEndian: actual.sin_port); listenFD = fd
@@ -72,6 +73,9 @@ public final class HTTPServer: @unchecked Sendable {
         while true {
             let client = accept(listenFD, nil, nil)
             if client < 0 { return }
+            _ = fcntl(client, F_SETFL, 0)
+            var noSigPipe: Int32 = 1
+            setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
             workQueue.async { [weak self] in self?.serve(client) }
         }
     }
