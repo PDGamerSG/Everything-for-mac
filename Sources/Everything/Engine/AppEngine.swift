@@ -36,10 +36,10 @@ public final class AppEngine: @unchecked Sendable {
     private let volumeProvider: @Sendable () -> [VolumeInfo]
     private var scanTask: DispatchWorkItem?
 
-    public init(settings: Settings = Settings(), supportDirectory: URL = AppPaths.supportDirectory,
+    public init(settings: Settings? = nil, supportDirectory: URL = AppPaths.supportDirectory,
                 volumeProvider: @escaping @Sendable () -> [VolumeInfo] = { Volumes.mounted() }) {
-        self.settings = settings
         self.supportDirectory = supportDirectory
+        self.settings = settings ?? Settings.load(from: supportDirectory.appendingPathComponent("Everything.ini"))
         self.volumeProvider = volumeProvider
         databaseURL = supportDirectory.appendingPathComponent("Everything.db")
         journalURL = supportDirectory.appendingPathComponent("Journal.db")
@@ -51,7 +51,7 @@ public final class AppEngine: @unchecked Sendable {
         } else {
             index = Index()
         }
-        let maxJournalKB = max(64, settings.int("journal_max_size"))
+        let maxJournalKB = max(64, self.settings.int("journal_max_size"))
         journal = IndexJournal.load(from: journalURL, maxKB: maxJournalKB) ?? IndexJournal(maxKB: maxJournalKB)
         runHistory = RunHistory.load(from: runHistoryURL)
         omissions = OmissionStore.load(from: supportDirectory.appendingPathComponent("Omit Results.csv"))

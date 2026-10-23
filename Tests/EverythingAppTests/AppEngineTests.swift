@@ -29,6 +29,15 @@ import EverythingIPC
         #expect(second.index.lookup(path: support.appendingPathComponent("hello.txt").path) != nil)
     }
 
+    @Test func loadsSettingsFromSupportDirectoryWhenNotInjected() throws {
+        let support = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("everything-settings-\(UUID().uuidString)")
+        let persisted = Settings()
+        persisted.set("http_server_enabled", true)
+        try persisted.save(to: support.appendingPathComponent("Everything.ini"))
+        let engine = AppEngine(supportDirectory: support)
+        #expect(engine.settings.bool("http_server_enabled"))
+    }
+
     @Test func startsConfiguredETPServer() throws {
         let support = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("everything-app-\(UUID().uuidString)")
         let settings = Settings()
