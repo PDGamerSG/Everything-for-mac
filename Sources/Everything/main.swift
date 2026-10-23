@@ -8,10 +8,13 @@ final class EverythingAppDelegate: NSObject, NSApplicationDelegate {
     let engine: AppEngine
     let windowController: SearchWindowController
     let showWindow: Bool
+    private var menuController: MainMenuController!
     init(engine: AppEngine, showWindow: Bool) {
         self.engine = engine; self.windowController = SearchWindowController(engine: engine); self.showWindow = showWindow
     }
     func applicationDidFinishLaunching(_ notification: Notification) {
+        menuController = MainActor.assumeIsolated { MainMenuController(engine: engine, primaryWindow: windowController) }
+        menuController.install()
         if showWindow { windowController.showWindow(nil) }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

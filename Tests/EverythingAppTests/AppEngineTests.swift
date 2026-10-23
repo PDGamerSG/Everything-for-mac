@@ -63,6 +63,15 @@ import EverythingIPC
         #expect(controller.tableView?.numberOfColumns == 4)
     }
 
+    @Test @MainActor func buildsApplicationMenu() throws {
+        let engine = AppEngine(settings: Settings(), supportDirectory: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("everything-menu-\(UUID().uuidString)"))
+        let menu = MainMenuController(engine: engine).makeMenu()
+        #expect(menu.item(withTitle: "File") != nil)
+        #expect(menu.item(withTitle: "Search") != nil)
+        #expect(menu.item(withTitle: "Index") != nil)
+        #expect(menu.item(withTitle: "Help") != nil)
+    }
+
     @Test func parsesAppCommandLine() throws {
         let options = try AppCommandLine.parse(["Everything", "-search", "report 2026", "-startup", "-rescan", "-instance", "work"])
         #expect(options.search == "report 2026")
