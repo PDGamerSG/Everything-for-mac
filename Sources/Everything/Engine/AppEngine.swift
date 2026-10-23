@@ -22,6 +22,7 @@ public final class AppEngine: @unchecked Sendable {
     public let socketPath: String
     public private(set) var ipc: IPCServer?
     public private(set) var http: HTTPServer?
+    public private(set) var etp: ETPServer?
     public private(set) var isRunning = false
     public var log: ((String) -> Void)? {
         didSet { monitor.log = log; ipc?.log = log; http?.log = log }
@@ -80,13 +81,22 @@ public final class AppEngine: @unchecked Sendable {
             httpServer.log = log
             try httpServer.start(); http = httpServer
         }
+        if servers && settings.bool("etp_server_enabled") {
+            let config = ETPServer.Configuration(bindAddress: settings.string("etp_server_bind").isEmpty ? "127.0.0.1" : settings.string("etp_server_bind"),
+                                                  port: UInt16(max(0, settings.int("etp_server_port"))),
+                                                  username: settings.string("etp_server_username"), password: settings.string("etp_server_password"),
+                                                  allowDownloads: settings.bool("etp_server_allow_file_download"))
+            let etpServer = ETPServer(service: service, configuration: config)
+            etpServer.log = log
+            try etpServer.start(); etp = etpServer
+        }
         isRunning = true
     }
 
     public func stop() {
         lock.lock(); defer { lock.unlock() }
         guard isRunning else { return }
-        monitor.stopAll(); http?.stop(); http = nil; ipc?.stop(); ipc = nil
+        monitor.stopAll(); http?.stop(); http = nil; etp?.stop(); etp = nil; ipc?.stop(); ipc = nil
         try? save(); isRunning = false
     }
 
