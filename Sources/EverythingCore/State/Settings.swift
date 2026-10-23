@@ -133,7 +133,7 @@ public final class Settings: @unchecked Sendable {
         "property_fast_sort": "0", "content_size_limit": "33554432",
         // Exclude
         "exclude_hidden": "0", "exclude_system": "0",
-        "exclude_folders": "/dev;/private/var/vm;/System/Volumes/VM;/System/Volumes/Preboot;/System/Volumes/Update;/System/Volumes/xarts;/System/Volumes/iSCPreboot;/System/Volumes/Hardware;*/.fseventsd;*/.Spotlight-V100;*/.DocumentRevisions-V100;*/.TemporaryItems;*/.Trashes;*/.MobileBackups;/private/var/folders/*/*/C;/private/var/db/uuidtext",
+        "exclude_folders": "/dev;/private/var/vm;/System/Volumes/VM;/System/Volumes/Preboot;/System/Volumes/Update;/System/Volumes/xarts;/System/Volumes/iSCPreboot;/System/Volumes/Hardware;/System/Volumes/Data;*/.fseventsd;*/.Spotlight-V100;*/.DocumentRevisions-V100;*/.TemporaryItems;*/.Trashes;*/.MobileBackups;/private/var/folders/*/*/C;/private/var/db/uuidtext",
         "include_only_files": "", "exclude_files": "",
         // HTTP
         "http_server_enabled": "0", "http_server_bind": "", "http_server_port": "8080", "http_server_username": "", "http_server_password": "",

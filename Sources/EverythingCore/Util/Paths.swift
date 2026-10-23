@@ -5,6 +5,7 @@ public enum Paths {
     /// `~` expanded, duplicate separators collapsed.
     public static func normalize(_ p: String) -> String {
         var s = p.replacingOccurrences(of: "\\", with: "/")
+        if let n = QueryParser.driveLetterPrefix(s) { s = String(s.dropFirst(n)); if !s.hasPrefix("/") { s = "/" + s } }
         if s.hasPrefix("~") { s = (s as NSString).expandingTildeInPath }
         while s.contains("//") { s = s.replacingOccurrences(of: "//", with: "/") }
         if s.count > 1 && s.hasSuffix("/") { s.removeLast() }

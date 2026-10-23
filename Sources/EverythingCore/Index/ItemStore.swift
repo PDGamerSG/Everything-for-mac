@@ -184,7 +184,7 @@ public final class ItemStore {
             dateAccessedArr[Int(id)] = r.dateAccessed
             dateChangedArr[Int(id)] = r.dateChanged
             inodeArr[Int(id)] = r.inode
-            extArr[Int(id)] = r.flags.contains(.folder) ? 0 : extensions.id(for: ItemStore.extensionOf(r.name))
+            extArr[Int(id)] = extensions.id(for: ItemStore.extensionOf(r.name))
             firstChild[Int(id)] = invalidItem
             nextSibling[Int(id)] = invalidItem
             prevSibling[Int(id)] = invalidItem
@@ -202,7 +202,7 @@ public final class ItemStore {
             dateAccessedArr.append(r.dateAccessed)
             dateChangedArr.append(r.dateChanged)
             inodeArr.append(r.inode)
-            extArr.append(r.flags.contains(.folder) ? 0 : extensions.id(for: ItemStore.extensionOf(r.name)))
+            extArr.append(extensions.id(for: ItemStore.extensionOf(r.name)))
             firstChild.append(invalidItem)
             nextSibling.append(invalidItem)
             prevSibling.append(invalidItem)
@@ -247,7 +247,7 @@ public final class ItemStore {
         guard isAlive(id) else { return }
         garbageBytes += Int(nameLength[Int(id)])
         writeName(id, newName, reuse: true)
-        if !flagsArr[Int(id)].contains(.folder) { extArr[Int(id)] = extensions.id(for: ItemStore.extensionOf(newName)) }
+        extArr[Int(id)] = extensions.id(for: ItemStore.extensionOf(newName))
         generation &+= 1
     }
 
@@ -402,14 +402,12 @@ public final class ItemStore {
 
     public func stem(_ id: ItemID) -> String {
         let n = name(id)
-        if isFolder(id) { return n }
         guard let dot = n.lastIndex(of: "."), dot != n.startIndex else { return n }
         return String(n[..<dot])
     }
 
     public func extensionName(_ id: ItemID) -> String {
-        if isFolder(id) { return "" }
-        return extensions.name(extArr[Int(id)])
+        extensions.name(extArr[Int(id)])
     }
 
     public static func extensionOf(_ name: String) -> String {
