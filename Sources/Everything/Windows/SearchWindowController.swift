@@ -138,11 +138,11 @@ private final class SearchViewController: NSViewController, NSSearchFieldDelegat
         request.defaults = MatchDefaults()
         request.sort = [SortKey("name")]
         statusField.stringValue = "Searching…"
+        let search = engine.search
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self else { return }
-            let result = self.engine.search.search(request)
+            let result = search.search(request)
             DispatchQueue.main.async {
-                guard serial == self.querySerial else { return }
+                guard let self, serial == self.querySerial else { return }
                 self.result = result
                 self.tableView.reloadData()
                 self.statusField.stringValue = "\(result.totalBeforeLimit) results  ·  \(result.fileCount) files  ·  \(result.folderCount) folders  ·  \(Int(result.seconds * 1000)) ms"
@@ -180,8 +180,18 @@ private final class SearchViewController: NSViewController, NSSearchFieldDelegat
         let column = descriptor.key ?? "name"
         var request = QueryRequest(text: searchField.stringValue)
         request.sort = [SortKey(column, ascending: descriptor.ascending)]
-        let result = engine.search.search(request)
-        self.result = result; tableView.reloadData()
+        let search = engine.search
+        let serial = querySerial + 1
+        querySerial = serial
+        statusField.stringValue = "Searching…"
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = search.search(request)
+            DispatchQueue.main.async {
+                guard let self, serial == self.querySerial else { return }
+                self.result = result; tableView.reloadData()
+                self.statusField.stringValue = "\(result.totalBeforeLimit) results  ·  \(result.fileCount) files  ·  \(result.folderCount) folders  ·  \(Int(result.seconds * 1000)) ms"
+            }
+        }
     }
 
     @objc func openSelection(_ sender: Any?) {
