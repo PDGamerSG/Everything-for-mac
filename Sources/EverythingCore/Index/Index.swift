@@ -61,11 +61,11 @@ public final class Index: @unchecked Sendable {
 
     @discardableResult
     public func addRoot(kind: RootKind, path: String, label: String, uuid: String = "", includeOnly: [String] = [],
-                        monitor: Bool = true, deviceID: Int32 = 0, fileSystem: String = "") -> Root {
+                        monitor: Bool = true, deviceID: Int32 = 0, fileSystem: String = "", itemName: String? = nil) -> Root {
         if let existing = roots.first(where: { $0.path == path && $0.kind == kind }) { return existing }
         var flags: ItemFlags = [.folder, .root]
         if kind == .fileList { flags.insert(.fileList) }
-        let id = store.add(ItemRecord(name: path, parent: invalidItem, flags: flags))
+        let id = store.add(ItemRecord(name: itemName ?? path, parent: invalidItem, flags: flags))
         let r = Root(kind: kind, path: path, label: label, uuid: uuid, item: id, includeOnly: includeOnly,
                      monitor: monitor, deviceID: deviceID, fileSystem: fileSystem)
         roots.append(r)

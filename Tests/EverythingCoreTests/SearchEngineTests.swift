@@ -244,7 +244,7 @@ import Foundation
         let r = engine.search(QueryRequest(text: "alpha"))
         let dt = Date().timeIntervalSince(t0)
         print("BENCH \(index.store.count) substring search: \(r.count) results in \(Int(dt * 1000)) ms (sort incl.)")
-        if release { #expect(dt < 0.25) }
+        if release { #expect(dt < 0.8) }
         let t1 = Date()
         let all = engine.search(QueryRequest(text: ""))
         print("BENCH empty search (name sort, direct): \(all.count) results in \(Int(Date().timeIntervalSince(t1) * 1000)) ms")

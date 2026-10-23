@@ -81,7 +81,7 @@ public struct ResultSorter {
         guard ids.count > 1 else { return ids }
         let primary = keys[0]
         var sorted: [ItemID]
-        if let fs = fastSort, fs.canOrder(primary.property), ids.count > 50_000 {
+        if let fs = fastSort, fs.canOrder(primary.property), ids.count > 5_000 {
             sorted = fs.order(ids, by: primary.property, ascending: primary.ascending)
         } else {
             sorted = sortDirect(ids)
