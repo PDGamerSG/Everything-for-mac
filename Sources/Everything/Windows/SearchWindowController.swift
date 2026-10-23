@@ -107,6 +107,12 @@ private final class SearchViewController: NSViewController, NSSearchFieldDelegat
         tableView.dataSource = self
         tableView.target = self
         tableView.doubleAction = #selector(openSelection(_:))
+        let contextMenu = NSMenu()
+        contextMenu.addItem(NSMenuItem(title: "Open", action: #selector(openSelection(_:)), keyEquivalent: ""))
+        contextMenu.addItem(NSMenuItem(title: "Reveal in Finder", action: #selector(revealSelection(_:)), keyEquivalent: ""))
+        contextMenu.addItem(NSMenuItem(title: "Copy Full Path", action: #selector(copyFullPath(_:)), keyEquivalent: ""))
+        for item in contextMenu.items { item.target = self }
+        tableView.menu = contextMenu
         let columns: [(String, String, CGFloat)] = [("name", "Name", 300), ("path", "Path", 360), ("size", "Size", 100), ("modified", "Date Modified", 170)]
         for (identifier, title, width) in columns {
             let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(identifier))
@@ -195,9 +201,26 @@ private final class SearchViewController: NSViewController, NSSearchFieldDelegat
     }
 
     @objc func openSelection(_ sender: Any?) {
-        guard let result, tableView.clickedRow >= 0, tableView.clickedRow < result.ids.count else { return }
-        let path = result.fullPath(result.ids[tableView.clickedRow])
+        guard let path = selectedPath() else { return }
         NSWorkspace.shared.open(URL(fileURLWithPath: path))
         _ = engine.runHistory.increment(path)
+    }
+
+    @objc private func revealSelection(_ sender: Any?) {
+        guard let path = selectedPath() else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+    }
+
+    @objc private func copyFullPath(_ sender: Any?) {
+        guard let path = selectedPath() else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(path, forType: .string)
+    }
+
+    private func selectedPath() -> String? {
+        guard let result else { return nil }
+        let row = tableView.clickedRow >= 0 ? tableView.clickedRow : tableView.selectedRow
+        guard row >= 0, row < result.ids.count else { return nil }
+        return result.fullPath(result.ids[row])
     }
 }

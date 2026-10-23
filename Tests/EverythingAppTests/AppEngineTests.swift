@@ -82,6 +82,7 @@ import EverythingIPC
         #expect(controller.window != nil)
         #expect(controller.searchField != nil)
         #expect(controller.tableView?.numberOfColumns == 4)
+        #expect(controller.tableView?.menu?.items.count == 3)
     }
 
     @Test @MainActor func buildsApplicationMenu() throws {
