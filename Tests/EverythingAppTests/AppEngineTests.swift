@@ -41,6 +41,19 @@ import EverythingIPC
         #expect(engine.etp?.port ?? 0 > 0)
     }
 
+    @Test func startsConfiguredNetworkIndexServer() throws {
+        let support = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("everything-net-(UUID().uuidString)")
+        let settings = Settings()
+        settings.set("everything_server_enabled", true)
+        settings.set("everything_server_port", 0)
+        settings.set("everything_server_users", "user:secret")
+        let engine = AppEngine(settings: settings, supportDirectory: support)
+        try engine.start(scan: false, servers: true)
+        defer { engine.stop() }
+        #expect(engine.netIndex != nil)
+        #expect(engine.netIndex?.port ?? 0 > 0)
+    }
+
     @Test @MainActor func buildsSearchWindow() throws {
         let engine = AppEngine(settings: Settings(), supportDirectory: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("everything-ui-\(UUID().uuidString)"))
         let controller = SearchWindowController(engine: engine)

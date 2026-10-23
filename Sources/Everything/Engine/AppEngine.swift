@@ -3,7 +3,7 @@ import EverythingCore
 import EverythingIPC
 import EverythingServers
 
-/// Owns the long-lived index, persistence, monitor, IPC, and optional HTTP service.
+/// Owns the long-lived index, persistence, monitor, IPC, and optional network services.
 /// UI code talks to this object instead of reaching into the core directly.
 public final class AppEngine: @unchecked Sendable {
     public let settings: Settings
@@ -23,10 +23,11 @@ public final class AppEngine: @unchecked Sendable {
     public private(set) var ipc: IPCServer?
     public private(set) var http: HTTPServer?
     public private(set) var etp: ETPServer?
+    public private(set) var netIndex: NetIndexServer?
     public private(set) var isRunning = false
     public private(set) var isScanning = false
     public var log: ((String) -> Void)? {
-        didSet { monitor.log = log; ipc?.log = log; http?.log = log }
+        didSet { monitor.log = log; ipc?.log = log; http?.log = log; etp?.log = log; netIndex?.log = log }
     }
 
     private let lock = NSLock()
@@ -99,6 +100,15 @@ public final class AppEngine: @unchecked Sendable {
             etpServer.log = log
             try etpServer.start(); etp = etpServer
         }
+        if servers && settings.bool("everything_server_enabled") {
+            let config = NetIndexServer.Configuration(bindAddress: settings.string("everything_server_bind").isEmpty ? "127.0.0.1" : settings.string("everything_server_bind"),
+                                                       port: UInt16(max(0, settings.int("everything_server_port"))),
+                                                       users: parseNetworkUsers(settings.string("everything_server_users")),
+                                                       includeOnly: settings.list("everything_server_include_only"))
+            let server = NetIndexServer(service: service, configuration: config)
+            server.log = log
+            try server.start(); netIndex = server
+        }
         isRunning = true
         if needsInitialScan {
             isScanning = true
@@ -116,7 +126,7 @@ public final class AppEngine: @unchecked Sendable {
         lock.lock()
         guard isRunning else { lock.unlock(); return }
         scanTask?.cancel()
-        monitor.stopAll(); http?.stop(); http = nil; etp?.stop(); etp = nil; ipc?.stop(); ipc = nil
+        monitor.stopAll(); http?.stop(); http = nil; etp?.stop(); etp = nil; netIndex?.stop(); netIndex = nil; ipc?.stop(); ipc = nil
         isRunning = false
         lock.unlock()
         scanGroup.wait()
@@ -185,5 +195,14 @@ public final class AppEngine: @unchecked Sendable {
             let s = self.monitor.statistics
             return ["monitor.created": String(s.created), "monitor.removed": String(s.removed), "monitor.modified": String(s.modified), "monitor.events": String(s.events)]
         }
+    }
+
+    private func parseNetworkUsers(_ value: String) -> [String: String] {
+        var users: [String: String] = [:]
+        for pair in value.split(separator: ";") {
+            let parts = pair.split(separator: ":", maxSplits: 1).map(String.init)
+            if parts.count == 2, !parts[0].isEmpty { users[parts[0]] = parts[1] }
+        }
+        return users
     }
 }
