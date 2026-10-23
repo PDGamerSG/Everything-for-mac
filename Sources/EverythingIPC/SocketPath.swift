@@ -4,8 +4,12 @@ import EverythingCore
 /// Location of the Unix domain socket for an instance (sun_path is limited to 104 bytes on macOS).
 public enum SocketPath {
     public static func path(instance: String = AppPaths.instanceName) -> String {
+        path(supportDirectory: AppPaths.supportDirectory, instance: instance)
+    }
+
+    public static func path(supportDirectory: URL, instance: String = AppPaths.instanceName) -> String {
         let name = instance.isEmpty ? "everything.sock" : "everything-\(instance).sock"
-        let preferred = AppPaths.supportDirectory.appendingPathComponent(name).path
+        let preferred = supportDirectory.appendingPathComponent(name).path
         if preferred.utf8.count < 100 { return preferred }
         let tmp = (NSTemporaryDirectory() as NSString).appendingPathComponent(name)
         if tmp.utf8.count < 100 { return tmp }

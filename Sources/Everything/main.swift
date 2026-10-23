@@ -76,6 +76,10 @@ do {
     fputs("Everything: \(error)\n", stderr)
     exit(1)
 }
+engine.service.onExit = { [weak engine] in
+    engine?.stop()
+    NSApp.terminate(nil)
+}
 let appDelegate = MainActor.assumeIsolated { EverythingAppDelegate(engine: engine, showWindow: !commandLine.startup && !commandLine.noWindow) }
 if let search = commandLine.search { MainActor.assumeIsolated { appDelegate.windowController.setSearch(search) } }
 engine.service.onCommand = { args in

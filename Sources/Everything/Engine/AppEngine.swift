@@ -46,9 +46,7 @@ public final class AppEngine: @unchecked Sendable {
         databaseURL = supportDirectory.appendingPathComponent("Everything\(suffix).db")
         journalURL = supportDirectory.appendingPathComponent("Journal\(suffix).db")
         runHistoryURL = supportDirectory.appendingPathComponent("Run History\(suffix).csv")
-        let socketName = AppPaths.instanceName.isEmpty ? "everything.sock" : "everything-\(AppPaths.instanceName).sock"
-        let preferredSocket = supportDirectory.appendingPathComponent(socketName).path
-        socketPath = preferredSocket.utf8.count < 100 ? preferredSocket : (NSTemporaryDirectory() as NSString).appendingPathComponent("everything-\(UUID().uuidString).sock")
+        socketPath = SocketPath.path(supportDirectory: supportDirectory, instance: AppPaths.instanceName)
         if let loaded = try? IndexDB.load(from: databaseURL) {
             index = loaded
         } else {

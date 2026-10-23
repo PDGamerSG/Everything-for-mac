@@ -41,7 +41,8 @@ public struct ESOptions: Equatable, Sendable {
     public static func parse(_ argv: [String]) throws -> ESOptions {
         var out = ESOptions()
         var terms: [String] = []
-        var i = argv.first == "es" || argv.first == "ES" ? 1 : 0
+        let executable = argv.first.map { URL(fileURLWithPath: $0).lastPathComponent.lowercased() } ?? ""
+        var i = executable == "es" ? 1 : 0
         func value(_ option: String) throws -> String {
             guard i + 1 < argv.count else { throw ESParseError.missingValue(option) }
             i += 1

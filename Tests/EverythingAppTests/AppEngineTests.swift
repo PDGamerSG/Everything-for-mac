@@ -50,6 +50,12 @@ import EverythingIPC
         #expect(FileManager.default.fileExists(atPath: support.appendingPathComponent("Everything-work.ini").path))
     }
 
+    @Test func longSupportPathUsesSharedDeterministicSocketFallback() {
+        let support = URL(fileURLWithPath: "/tmp/\(String(repeating: "long-", count: 25))")
+        let engine = AppEngine(settings: Settings(), supportDirectory: support)
+        #expect(engine.socketPath == SocketPath.path(supportDirectory: support, instance: AppPaths.instanceName))
+    }
+
     @Test func startsConfiguredETPServer() throws {
         let support = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("everything-app-\(UUID().uuidString)")
         let settings = Settings()
@@ -101,6 +107,12 @@ import EverythingIPC
         #expect(options.rescan)
         #expect(options.instance == "work")
         #expect(try AppCommandLine.parse(["Everything", "-url", "es:invoice"]).search == "invoice")
+    }
+
+    @Test func ignoresExecutablePathInArguments() throws {
+        let options = try AppCommandLine.parse(["/Applications/Everything.app/Contents/MacOS/Everything", "-search", "invoice"])
+        #expect(options.search == "invoice")
+        #expect(try AppCommandLine.parse(["./Everything"]).search == nil)
     }
 
     @Test func rejectsUnknownAppSwitch() {

@@ -26,7 +26,8 @@ public struct AppCommandLine: Equatable, Sendable {
     public static func parse(_ argv: [String]) throws -> AppCommandLine {
         var out = AppCommandLine(search: nil)
         var terms: [String] = []
-        var i = argv.first == "Everything" || argv.first == "everything" ? 1 : 0
+        let executable = argv.first.map { URL(fileURLWithPath: $0).lastPathComponent.lowercased() } ?? ""
+        var i = executable == "everything" ? 1 : 0
         func value(_ option: String) throws -> String { guard i + 1 < argv.count else { throw Error.missingValue(option) }; i += 1; return argv[i] }
         while i < argv.count {
             let arg = argv[i]; guard arg.hasPrefix("-") && arg != "-" else { terms.append(arg); i += 1; continue }
