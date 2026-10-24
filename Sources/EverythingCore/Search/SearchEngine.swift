@@ -210,6 +210,8 @@ public final class SearchEngine: @unchecked Sendable {
     public var parseOptions = ParseOptions()
     public var contentSizeLimit = 32 * 1024 * 1024
     public var fileListFilenames: [ItemID: String] = [:]
+    /// Test hook invoked after a search acquires the index read lock.
+    internal var beforeSearchContext: (@Sendable () -> Void)?
     public let fastSort: FastSort
     private var pathTable: PathTable?
     private let pathLock = NSLock()
@@ -224,15 +226,27 @@ public final class SearchEngine: @unchecked Sendable {
 
     /// Path table cached per generation.
     public func currentPathTable() -> PathTable {
+        // Always acquire the index lock before the cache lock. Searches already hold
+        // the index read lock while building their context; taking another read lock
+        // from there can deadlock when a scanner writer is queued.
+        index.read { currentPathTableLocked() }
+    }
+
+    public func makeContext(now: Date = Date(), cancel: CancelToken? = nil) -> EvalContext {
+        index.read { makeContextLocked(now: now, cancel: cancel) }
+    }
+
+    private func currentPathTableLocked() -> PathTable {
         pathLock.lock(); defer { pathLock.unlock() }
         if let t = pathTable, t.generation == index.store.generation { return t }
-        let t = index.read { PathTable(store: index.store, roots: index.rootItems) }
+        let t = PathTable(store: index.store, roots: index.rootItems)
         pathTable = t
         return t
     }
 
-    public func makeContext(now: Date = Date(), cancel: CancelToken? = nil) -> EvalContext {
-        EvalContext(index: index, paths: currentPathTable(), properties: properties, now: now, runHistory: runHistory,
+    /// Builds a context while the caller already holds the index read lock.
+    private func makeContextLocked(now: Date, cancel: CancelToken?) -> EvalContext {
+        EvalContext(index: index, paths: currentPathTableLocked(), properties: properties, now: now, runHistory: runHistory,
                     recentChanges: recentChanges, fileListFilenames: fileListFilenames, cancelled: { cancel?.isCancelled ?? false })
     }
 
@@ -267,7 +281,8 @@ public final class SearchEngine: @unchecked Sendable {
     public func search(_ request: QueryRequest, cancel: CancelToken? = nil, now: Date = Date()) -> ResultSet {
         let start = Date()
         return index.read {
-            let ctx = makeContext(now: now, cancel: cancel)
+            beforeSearchContext?()
+            let ctx = makeContextLocked(now: now, cancel: cancel)
             let query = compile(request.text, defaults: request.defaults, request: request, now: now)
             var filterQuery: CompiledQuery? = nil
             if !request.filterSearch.isEmpty {

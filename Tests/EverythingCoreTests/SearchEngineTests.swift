@@ -219,6 +219,35 @@ import Foundation
         #expect(r.count == 0)
     }
 
+    @Test func searchCanBuildContextWhileScannerWriterIsQueued() {
+        let index = Index()
+        let root = index.addRoot(kind: .folder, path: "/Fixture", label: "Fixture")
+        index.store.add(ItemRecord(name: "invoice.txt", parent: root.item))
+        let engine = SearchEngine(index: index)
+        let writerRequested = DispatchSemaphore(value: 0)
+        let writerAcquired = DispatchSemaphore(value: 0)
+        let releaseWriter = DispatchSemaphore(value: 0)
+        let finished = DispatchSemaphore(value: 0)
+        engine.beforeSearchContext = {
+            writerRequested.signal()
+            #expect(writerAcquired.wait(timeout: .now() + 0.05) == .timedOut)
+        }
+        DispatchQueue.global(qos: .utility).async {
+            _ = writerRequested.wait(timeout: .now() + 1)
+            index.write {
+                writerAcquired.signal()
+                _ = releaseWriter.wait(timeout: .now() + 1)
+            }
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = engine.search(QueryRequest(text: "invoice"))
+            #expect(result.count == 1)
+            finished.signal()
+        }
+        #expect(finished.wait(timeout: .now() + 2) == .success)
+        releaseWriter.signal()
+    }
+
     @Test func highlightRanges() {
         let index = SearchEngineTests.makeIndex(items: 500)
         let engine = SearchEngine(index: index)

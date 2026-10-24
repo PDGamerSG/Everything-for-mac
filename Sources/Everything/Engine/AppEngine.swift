@@ -62,7 +62,9 @@ public final class AppEngine: @unchecked Sendable {
         search.recentChanges = journal
         search.omissions = omissions
         search.tempOmissions = temporaryOmissions
-        monitor = ChangeMonitor(index: index, journal: journal)
+        monitor = ChangeMonitor(index: index, journal: journal,
+                                rules: ExcludeRules(settings: self.settings,
+                                                    includeOnlyFolders: self.settings.list("volume_include_only")))
         service = EngineService(engine: search)
         service.journal = journal
         service.runHistory = runHistory
@@ -151,9 +153,11 @@ public final class AppEngine: @unchecked Sendable {
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self else { return }
             let roots = self.index.read { self.index.roots }
+            let rules = ExcludeRules(settings: self.settings,
+                                     includeOnlyFolders: self.settings.list("volume_include_only"))
             for root in roots {
                 let devices = Volumes.deviceID(of: root.path).map { Set([$0]) } ?? []
-                _ = VolumeScanner(index: self.index, rules: .none, allowedDevices: devices).scan(rootPath: root.path, rootItem: root.item)
+                _ = VolumeScanner(index: self.index, rules: rules, allowedDevices: devices).scan(rootPath: root.path, rootItem: root.item)
             }
             self.index.dbLoaded = true
             try? self.save()
@@ -161,6 +165,8 @@ public final class AppEngine: @unchecked Sendable {
     }
 
     private func startMonitors() {
+        monitor.rules = ExcludeRules(settings: settings,
+                                     includeOnlyFolders: settings.list("volume_include_only"))
         let roots = index.read { index.roots }
         for root in roots where root.monitor {
             monitor.start(root: root, sinceEventID: root.lastEventID == 0 ? nil : root.lastEventID)
@@ -179,6 +185,8 @@ public final class AppEngine: @unchecked Sendable {
 
     private func scanConfiguredVolumes() {
         let volumes = Volumes.selected(from: volumeProvider(), settings: settings)
+        let rules = ExcludeRules(settings: settings,
+                                 includeOnlyFolders: settings.list("volume_include_only"))
         let task = scanTask
         for volume in volumes {
             guard !(task?.isCancelled ?? true) else { break }
@@ -186,7 +194,7 @@ public final class AppEngine: @unchecked Sendable {
                 index.addRoot(kind: volume.isNetwork ? .network : .volume, path: volume.mountPoint, label: volume.name,
                               uuid: volume.uuid, deviceID: volume.deviceID, fileSystem: volume.fileSystem)
             }
-            _ = VolumeScanner(index: index, rules: .none, allowedDevices: volume.allDeviceIDs).scan(
+            _ = VolumeScanner(index: index, rules: rules, allowedDevices: volume.allDeviceIDs).scan(
                 rootPath: volume.mountPoint, rootItem: root.item, cancel: { task?.isCancelled ?? true })
         }
         lock.lock()

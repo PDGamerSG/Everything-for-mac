@@ -123,10 +123,15 @@ import EverythingIPC
         let rootURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("everything-scan-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         try Data("indexed".utf8).write(to: rootURL.appendingPathComponent("indexed.txt"))
+        let excludedURL = rootURL.appendingPathComponent("Excluded")
+        try FileManager.default.createDirectory(at: excludedURL, withIntermediateDirectories: true)
+        try Data("ignored".utf8).write(to: excludedURL.appendingPathComponent("ignored.txt"))
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
         let settings = Settings()
         settings.set("volumes", rootURL.path)
+        settings.set("exclude_folders", excludedURL.path)
+        #expect(!ExcludeRules(settings: settings).allowsFolder(path: excludedURL.path, name: "Excluded", isHidden: false, isSystem: false))
         let volume = VolumeInfo(name: "Fixture", mountPoint: rootURL.path, deviceID: Volumes.deviceID(of: rootURL.path) ?? 0)
         let support = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("everything-scan-support-\(UUID().uuidString)")
         let engine = AppEngine(settings: settings, supportDirectory: support, volumeProvider: { [volume] })
@@ -139,6 +144,7 @@ import EverythingIPC
         for _ in 0..<100 where engine.isScanning { Thread.sleep(forTimeInterval: 0.01) }
         #expect(!engine.isScanning)
         #expect(engine.index.lookup(path: rootURL.appendingPathComponent("indexed.txt").path) != nil)
+        #expect(engine.index.lookup(path: excludedURL.appendingPathComponent("ignored.txt").path) == nil)
         #expect(engine.index.dbLoaded)
     }
 }

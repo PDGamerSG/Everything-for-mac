@@ -64,6 +64,7 @@ public struct ExcludeRules: Sendable {
     public func allowsFolder(path: String, name: String, isHidden: Bool, isSystem: Bool) -> Bool {
         if excludeHidden && isHidden { return false }
         if excludeSystem && isSystem { return false }
+        if hasExcludedFolderAncestor(path) { return false }
         for p in excludeFolders where p.matches(path: path, name: name) { return false }
         if !includeOnlyFolders.isEmpty {
             // allowed if path is inside an include-only folder, or is an ancestor of one (so we can reach it)
@@ -78,9 +79,21 @@ public struct ExcludeRules: Sendable {
     public func allowsFile(path: String, name: String, isHidden: Bool, isSystem: Bool) -> Bool {
         if excludeHidden && isHidden { return false }
         if excludeSystem && isSystem { return false }
+        if hasExcludedFolderAncestor(path) { return false }
         if !includeOnlyFolders.isEmpty && !includeOnlyFolders.contains(where: { path.hasPrefix($0 + "/") }) { return false }
         for p in excludeFiles where p.matches(path: path, name: name) { return false }
         if !includeOnlyFiles.isEmpty && !includeOnlyFiles.contains(where: { $0.matches(path: path, name: name) }) { return false }
         return true
+    }
+
+    private func hasExcludedFolderAncestor(_ path: String) -> Bool {
+        var ancestor = Paths.parent(Paths.normalize(path))
+        while !ancestor.isEmpty {
+            let ancestorName = Paths.lastComponent(ancestor)
+            if excludeFolders.contains(where: { $0.matches(path: ancestor, name: ancestorName) }) { return true }
+            if ancestor == "/" { break }
+            ancestor = Paths.parent(ancestor)
+        }
+        return false
     }
 }

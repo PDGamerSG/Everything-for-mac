@@ -69,6 +69,13 @@ import Foundation
         #expect(index.lookup(path: tree.root.appendingPathComponent("dir0_1/file1_3.swift").path) != nil)
     }
 
+    @Test func excludedFolderRejectsDescendantFileEvents() {
+        let excluded = "/tmp/everything-excluded/Cache"
+        let rules = ExcludeRules(excludeFolders: [excluded])
+        #expect(!rules.allowsFolder(path: excluded, name: "Cache", isHidden: false, isSystem: false))
+        #expect(!rules.allowsFile(path: excluded + "/ignored.txt", name: "ignored.txt", isHidden: false, isSystem: false))
+    }
+
     @Test func includeOnlyFolders() throws {
         let tree = try Fixtures.makeTree(files: 5, depth: 2, fanout: 2, unicode: false)
         defer { tree.cleanup() }
