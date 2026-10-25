@@ -219,6 +219,20 @@ import Foundation
         #expect(r.count == 0)
     }
 
+    @Test func cancellationStopsLongCandidateEvaluation() {
+        let token = CancelToken()
+        var evaluated = 0
+        // Keep this below the minimum chunk size so the cancellation boundary is
+        // deterministic and the assertion measures a single worker's polling.
+        let result = SearchEngine.evaluate(range: 0..<3_000, threads: 1, cancel: token) { i in
+            evaluated += 1
+            if i == 100 { token.cancel() }
+            return true
+        }
+        #expect(result.isEmpty)
+        #expect(evaluated < 1_000)
+    }
+
     @Test func searchCanBuildContextWhileScannerWriterIsQueued() {
         let index = Index()
         let root = index.addRoot(kind: .folder, path: "/Fixture", label: "Fixture")

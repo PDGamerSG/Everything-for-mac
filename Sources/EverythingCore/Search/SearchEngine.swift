@@ -406,10 +406,17 @@ public final class SearchEngine: @unchecked Sendable {
                 if cancel?.isCancelled ?? false { return }
                 let lo = range.lowerBound + c * chunk, hi = min(range.upperBound, lo + chunk)
                 var out: [ItemID] = []
-                for i in lo..<hi where test(i) { out.append(ItemID(i)) }
+                for i in lo..<hi {
+                    // A query can be superseded while a predicate is evaluating a large
+                    // chunk. Poll periodically so stale UI searches release the index lock
+                    // promptly instead of waiting for the whole chunk to finish.
+                    if (i - lo) & 127 == 0, cancel?.isCancelled ?? false { break }
+                    if test(i) { out.append(ItemID(i)) }
+                }
                 buf[c] = out
             }
         }
+        if cancel?.isCancelled ?? false { return [] }
         var merged: [ItemID] = []
         merged.reserveCapacity(results.reduce(0) { $0 + $1.count })
         for r in results { merged.append(contentsOf: r) }
@@ -427,10 +434,14 @@ public final class SearchEngine: @unchecked Sendable {
                 if cancel?.isCancelled ?? false { return }
                 let lo = c * chunk, hi = min(n, lo + chunk)
                 var out: [ItemID] = []
-                for i in lo..<hi where test(ids[i]) { out.append(ids[i]) }
+                for i in lo..<hi {
+                    if (i - lo) & 127 == 0, cancel?.isCancelled ?? false { break }
+                    if test(ids[i]) { out.append(ids[i]) }
+                }
                 buf[c] = out
             }
         }
+        if cancel?.isCancelled ?? false { return [] }
         var merged: [ItemID] = []
         for r in results { merged.append(contentsOf: r) }
         return merged

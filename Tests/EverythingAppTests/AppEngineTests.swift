@@ -87,6 +87,8 @@ import EverythingIPC
         controller.loadWindow()
         #expect(controller.window != nil)
         #expect(controller.searchField != nil)
+        #expect(controller.searchField?.placeholderString == "Search files and folders…")
+        #expect(controller.window?.title == "Everything")
         #expect(controller.tableView?.numberOfColumns == 4)
         #expect(controller.tableView?.menu?.items.count == 3)
     }
