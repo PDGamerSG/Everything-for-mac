@@ -272,7 +272,21 @@ private final class SearchViewController: NSViewController, NSSearchFieldDelegat
 
     private func scheduleSearch() {
         pendingSearch?.cancel()
-        let work = DispatchWorkItem { [weak self] in DispatchQueue.main.async { self?.performSearch() } }
+        // Invalidate the currently displayed query immediately. The debounce
+        // window must not allow an older worker to publish results after the
+        // user has already typed a new query.
+        querySerial += 1
+        activeSearchToken?.cancel()
+        activeSearchToken = nil
+        progress.startAnimation(nil)
+        statusField.stringValue = "Waiting to search…"
+        let serial = querySerial
+        let work = DispatchWorkItem { [weak self] in
+            DispatchQueue.main.async {
+                guard let self, serial == self.querySerial else { return }
+                self.performSearch()
+            }
+        }
         pendingSearch = work
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.08, execute: work)
     }
